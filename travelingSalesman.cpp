@@ -1,4 +1,7 @@
+//George Sustare
+//Mark Giles
 //Ryan Fleming
+//Group 44
 //CS325 Project 4
 //2-Opt  algorithm for TSP
 //
@@ -8,9 +11,21 @@
 #include <vector>
 #include <algorithm>
 #include <limits>
+#include <string>
+#include <fstream>
+#include <cmath>
+#include <sstream>
 using namespace std;
-//random generator for testing DELETE LATER
-vector<vector<int> > randomAdjacencyMatrix(int cityCount);
+
+
+struct City
+{
+	int idNumber;
+	int x;
+	int y;
+};
+
+
 //nearest neighbor function makes tour from city to city
 vector<int> tour(vector<vector<int> > adjacencyMatrix, int cityCount);
 //gets distance
@@ -19,33 +34,47 @@ int getDistance(vector<vector<int> > adjacencyMatrix, vector<int> tour);
 vector<int> twoOpt(vector<int> tour, vector<vector<int> > adjacencyMatrix, int cityCount, clock_t timer);
 //helper for 2-Opt
 vector<int> swap(vector<int> tour, int front, int back, int cityCount);
+//function to intake file and covert into an adjacency matrix
+void intakeFile(string fileName, vector<vector<int> > &adjacencyMatrix);
 
-int main()
+int main(int argc, char* argv[])
 {
+	//if user does not format input file correctly, quit
+	if (argc != 2)
+	{
+		return 1;
+	}
+	//timing purposes for competition
 	double start = clock();
 	double end;
+	//make adjacency matrix and pipe the input file into it
 	vector<vector<int> > adjacencyMatrix;
-	//testing stuff
-	int cityCount = 5000;
-	adjacencyMatrix = randomAdjacencyMatrix(cityCount);
-	cityCount = adjacencyMatrix.size();
+	string inputFile = argv[1];
+	intakeFile(inputFile, adjacencyMatrix);
+	int cityCount = adjacencyMatrix.size();
+	//create tour using nearest neighbor algorithm
 	vector<int> mtour = tour(adjacencyMatrix, cityCount);
-	cout << "Pre-Optimized tour: " << endl;
-//	for (int i = 0; i < (cityCount - 1); i++)
-//	{
-//		cout << mtour[i] << endl;
-//	}
-	int distance = getDistance(adjacencyMatrix, mtour);
-	cout << "Pre-optimized Distance: " << distance << endl;
+	//run 2-opt algorithm using pre-optimized tour
 	vector<int> twoOpt1 = twoOpt(mtour, adjacencyMatrix, cityCount, start);
+	//run 2-opt algorithm using tour created by first optimization
 	vector<int> twoOpt2 = twoOpt(twoOpt1, adjacencyMatrix, cityCount, start);
-	distance = getDistance(adjacencyMatrix, twoOpt2);
+	//open output file with name + tour
+	ofstream outputFile;
+	inputFile += ".tour";
+	outputFile.open(inputFile.c_str());
+	//get tour length
+	int distance = getDistance(adjacencyMatrix, twoOpt2);
+	//testing
 	cout << "Optimized Distance: " << distance << endl;
-	cout << "Optimized tour: " <<endl;
-//	for (int i = 0; i < cityCount; i++)
-//	{
-//		cout << twoOpt2[i] << endl;
-//	}
+	//put completed tour and distance in file
+	outputFile << distance << endl;
+	for (int i = 0; i < cityCount; i++)
+	{
+		
+		outputFile << twoOpt2[i] << endl;
+	}
+	outputFile.close();
+	//timing for competition
 	end = clock();
 	end -= start;
 	end /= CLOCKS_PER_SEC;
@@ -53,27 +82,8 @@ int main()
 	return 0;
 }
 
-vector<vector<int> > randomAdjacencyMatrix(int cityCount)
-{
-	vector<vector<int> > adjacencyMatrix;
-	int random;
-	adjacencyMatrix.resize(cityCount, vector<int>(cityCount, 0));
-	for (int i = 0; i < cityCount; i++)
-	{
-		for (int j = 0; j <= i; j++)
-		{
-			random = rand() % 200 + 1;
-			if (i == j)
-			{
-				random = -1;
-			}
-			adjacencyMatrix[i][j] = random;
-			adjacencyMatrix[j][i] = random;
-		}
-	}
-	return adjacencyMatrix;
-}
-
+//nearest neighbor algorithm quickly creates a somewhat optimal tour
+//https://en.wikipedia.org/wiki/Nearest_neighbour_algorithm#Example_with_the_traveling_salesman_problem
 vector<int> tour(vector<vector<int> > adjacencyMatrix, int cityCount)
 {
 	int currentCity = 0;
@@ -99,6 +109,7 @@ vector<int> tour(vector<vector<int> > adjacencyMatrix, int cityCount)
 	return tour;
 }
 
+//calculate distance of a given tour by adding up all of the distances in an adjacency matrix
 int getDistance(vector<vector<int> > adjacencyMatrix, vector<int> tour)
 {
 	int distance;
@@ -116,15 +127,20 @@ int getDistance(vector<vector<int> > adjacencyMatrix, vector<int> tour)
 	return totalDistance;
 }
 
+//2-opt algorithm optimizes an already found solution/tour for TSP. So by running nearest neighbor which is quick but not optimal,
+//then running 2-opt which is accurate but slow on the tour given by nearest neighbor, we have a somewhat quick but still accurate solution
+//https://en.wikipedia.org/wiki/2-opt
 vector<int> twoOpt(vector<int> tour, vector<vector<int> > adjacencyMatrix, int cityCount, clock_t timer)
 {
 	int size = tour.size();
 	vector<int> solutionTour = tour;
+	//we take in the timer from main and put time limits on solving the algorithm so we can stay under 3 minutes for competition
+	//if optimization reaches time limit it just outputs what it has optimized so far
 	clock_t timeLimit = CLOCKS_PER_SEC * 15;
 	clock_t solveTime;
 	clock_t currentTime;
-	bool optimize = false;
-	while (!optimize && timer < timeLimit)
+	bool optimizeMore = false;
+	while (!optimizeMore && timer < timeLimit)
 	{
 		int optimalDistance = getDistance(adjacencyMatrix, solutionTour);
 		for(int i = 1; i < (size - 2); i++)
@@ -135,12 +151,13 @@ vector<int> twoOpt(vector<int> tour, vector<vector<int> > adjacencyMatrix, int c
 				int newDistance = getDistance(adjacencyMatrix, newTour);
 				if(newDistance < optimalDistance)
 				{
-					optimize = false;
+					optimizeMore = false;
 					solutionTour = newTour;
 					optimalDistance = newDistance;
 				}
 				currentTime = clock();
 				solveTime = currentTime - timer;
+				//if timed out, output the interrupted solve time for debugging and testing purposes
 				if (solveTime > timeLimit)
 				{
 					cout << "Interrupted Solve Time: " << double((solveTime / CLOCKS_PER_SEC)) << endl;
@@ -148,12 +165,15 @@ vector<int> twoOpt(vector<int> tour, vector<vector<int> > adjacencyMatrix, int c
 				}
 			}
 		}
-		optimize = true;
+		optimizeMore == true;
 	}
+	//if completed without timer time out output complete time for debugging and testing
 	cout << "Completed Solve Time: " << double((solveTime / CLOCKS_PER_SEC)) << endl;
 	return solutionTour;
 }
 
+//swap helper function for 2-opt
+//https://en.wikipedia.org/wiki/2-opt
 vector<int> swap(vector<int> tour, int front, int back, int cityCount)
 {
 	int size = tour.size();
@@ -174,4 +194,36 @@ vector<int> swap(vector<int> tour, int front, int back, int cityCount)
 	}
 	return newTour;
 }
-	
+
+//intakes file, puts each line into a City struct
+//put all cities into a vector
+//calculate distance between cities and put in adjacency matrix
+//https://en.wikipedia.org/wiki/Adjacency_matrix
+void intakeFile(string fileName, vector<vector<int> > &adjacencyMatrix)
+{
+	vector<City> allCities;
+	ifstream inputFile;
+	string argumentLine;
+	inputFile.open(fileName.c_str());
+	while(getline(inputFile, argumentLine))
+	{
+		istringstream iss(argumentLine);
+		City nextCity;
+		iss >> nextCity.idNumber;
+		iss >> nextCity.x;
+		iss >> nextCity.y;
+		allCities.push_back(nextCity);
+	}
+	inputFile.close();
+	int cityCount = allCities.size();
+	adjacencyMatrix.resize(cityCount, vector<int>(cityCount, -1));
+	for (int i = 0; i < cityCount; i++)
+	{
+		for (int j = 0; j < cityCount; j++)
+		{
+			//distance = sqrt((x2 - x1)^2 + (y2 -y1))^2)
+			//https://en.wikipedia.org/wiki/Distance#Geometry
+			adjacencyMatrix[i][j] = round(sqrt(pow((allCities[i].x - allCities[j].x), 2) + pow((allCities[i].y - allCities[j].y), 2)));
+		}
+	}
+}	
